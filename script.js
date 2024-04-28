@@ -7,6 +7,7 @@ const hangupButton = document.getElementById('hangupButton');
 const messageInput = document.getElementById('messageInput');
 const sendMessageButton = document.getElementById('sendMessageButton');
 const userListDiv = document.getElementById('userList');
+const messageContainer = document.getElementById('messageContainer');
 
 let username = '';
 
@@ -57,5 +58,7 @@ socket.on('incomingCall', (data) => {
 });
 
 socket.on('newMessage', (data) => {
-    alert(`New message from ${data.sender}: ${data.message}`);
+    const messageElement = document.createElement('div');
+    messageElement.textContent = `${data.sender}: ${data.message}`;
+    messageContainer.appendChild(messageElement);
 });
