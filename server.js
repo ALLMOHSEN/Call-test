@@ -25,6 +25,10 @@ io.on('connection', (socket) => {
     socket.on('call', (data) => {
         socket.to(data.targetId).emit('incomingCall', { caller: users[socket.id] });
     });
+
+    socket.on('message', (data) => {
+        io.emit('newMessage', { sender: data.sender, message: data.message });
+    });
 });
 
 function getUserList() {
