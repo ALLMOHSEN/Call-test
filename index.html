@@ -71,7 +71,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 #remoteVideo{width:100%;height:100%;object-fit:cover;display:block}
 #localVideo{position:absolute;bottom:12px;left:12px;width:120px;height:80px;object-fit:cover;border-radius:10px;border:2px solid var(--accent);background:#111;z-index:10}
 .video-controls{position:absolute;bottom:12px;right:12px;display:flex;gap:8px;z-index:10}
-.vc-btn{width:36px;height:36px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;background:rgba(0,0,0,.6);color:#fff;backdrop-filter:blur(4px);transition:background .15s}
+.vc-btn{width:36px;height:36px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;background:rgba(0,0,0,.6);color:#fff;backdrop-filter:blur(4px);transition:background .15s, transform .4s}
 .vc-btn:hover{background:rgba(0,0,0,.85)}
 .vc-btn.off{background:rgba(244,63,94,.7)}
 #noVideoMsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;flex-direction:column;gap:8px}
@@ -180,6 +180,7 @@ audio,video{display:none}
       <div class="video-controls">
         <button class="vc-btn" id="toggleMicBtn"  title="ميكروفون">🎤</button>
         <button class="vc-btn" id="toggleCamBtn"  title="كاميرا">📷</button>
+        <button class="vc-btn" id="flipCamBtn"    title="تدوير الكاميرا">🔄</button>
       </div>
     </div>
 
@@ -225,7 +226,7 @@ let pc=null, localStream=null, screenStream=null;
 let callTimerInterval=null, callSeconds=0;
 let conversationHistory={}, pendingOffer=null;
 let callMode='audio'; // 'audio' | 'video' | 'screen'
-let micOn=true, camOn=true;
+let micOn=true, camOn=true, currentFacingMode='user';
 
 // elements
 const $=id=>document.getElementById(id);
@@ -238,7 +239,7 @@ const screenBtn=$('screenBtn'), hangupBtn=$('hangupBtn');
 const callBanner=$('callBanner'), callingWith=$('callingWith'), callTimerEl=$('callTimer');
 const videoArea=$('videoArea'), remoteVideo=$('remoteVideo'), localVideo=$('localVideo');
 const noVideoMsg=$('noVideoMsg');
-const toggleMicBtn=$('toggleMicBtn'), toggleCamBtn=$('toggleCamBtn');
+const toggleMicBtn=$('toggleMicBtn'), toggleCamBtn=$('toggleCamBtn'), flipCamBtn=$('flipCamBtn');
 const messagesEl=$('messages'), placeholderEl=$('placeholder');
 const messageInput=$('messageInput'), sendBtn=$('sendBtn');
 const incomingCallEl=$('incomingCall'), callerNameEl=$('callerName');
@@ -432,6 +433,47 @@ toggleCamBtn.addEventListener('click',()=>{
   localVideo.style.display=camOn?'block':'none';
 });
 
+flipCamBtn.addEventListener('click', async ()=>{
+  if(!localStream || !pc) return;
+
+  // تبديل الكاميرا
+  currentFacingMode = currentFacingMode==='user' ? 'environment' : 'user';
+
+  // إيقاف الكاميرا الحالية
+  localStream.getVideoTracks().forEach(t=>t.stop());
+
+  try {
+    // فتح الكاميرا الجديدة
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: currentFacingMode },
+      audio: false
+    });
+
+    const newVideoTrack = newStream.getVideoTracks()[0];
+
+    // استبدال التراك في الاتصال
+    const sender = pc.getSenders().find(s=>s.track&&s.track.kind==='video');
+    if(sender) await sender.replaceTrack(newVideoTrack);
+
+    // استبدال التراك في localStream
+    localStream.getVideoTracks().forEach(t=>localStream.removeTrack(t));
+    localStream.addTrack(newVideoTrack);
+
+    // تحديث الفيديو المحلي
+    localVideo.srcObject = null;
+    localVideo.srcObject = localStream;
+
+    // أنيميشن بسيط على الزر
+    flipCamBtn.style.transform='rotate(180deg)';
+    setTimeout(()=>flipCamBtn.style.transform='',400);
+
+  } catch(e) {
+    alert('لا يمكن تدوير الكاميرا: '+e.message);
+    // رجوع للوضع السابق
+    currentFacingMode = currentFacingMode==='user' ? 'environment' : 'user';
+  }
+});
+
 // ── WebRTC ──
 function createPC(){
   const p=new RTCPeerConnection(ICE);
@@ -497,9 +539,10 @@ function closePC(){
   localVideo.srcObject=null;
   videoArea.classList.remove('active');
   hangupBtn.disabled=true;
-  micOn=true; camOn=true;
+  micOn=true; camOn=true; currentFacingMode='user';
   toggleMicBtn.textContent='🎤'; toggleMicBtn.classList.remove('off');
   toggleCamBtn.textContent='📷'; toggleCamBtn.classList.remove('off');
+  flipCamBtn.style.transform='';
   if(selectedUser){callAudioBtn.disabled=false;callVideoBtn.disabled=false;screenBtn.disabled=false;}
   stopCallBanner();
 }
